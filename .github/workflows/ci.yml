@@ -1,15 +1,15 @@
-name: PHP CI
+name: Netease Cloud Music Auto Tasks
 
 on:
-  push:
-    branches: [ main, develop ]  # 当向 main 或 develop 分支推送代码时触发
-  pull_request:
-    branches: [ main ]           # 当针对 main 分支创建拉取请求时触发
+  schedule:
+    # 每天 UTC 时间 00:00 执行（北京时间 08:00）
+    - cron: '0 0 * * *'
+  workflow_dispatch:  # 允许手动触发
 
 jobs:
-  build:
+  netease-tasks:
     runs-on: ubuntu-latest
-
+    
     steps:
       # 步骤1：检出代码
       - name: Checkout code
@@ -19,28 +19,61 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'  # 指定你项目所需的 PHP 版本
+          php-version: '8.2'
+          extensions: curl, openssl, mbstring
+          tools: composer
 
-      # 步骤3：验证 composer.json 文件
-      - name: Validate composer.json
-        run: composer validate --strict
-
-      # 步骤4：安装依赖（推荐使用缓存以加速后续构建）
-      - name: Get Composer Cache Directory
-        id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
-
-      - name: Cache Composer dependencies
-        uses: actions/cache@v3
-        with:
-          path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-php-
-
+      # 步骤3：安装依赖（如果需要）
       - name: Install dependencies
-        run: composer install --no-progress --no-interaction --prefer-dist
+        run: |
+          composer require guzzlehttp/guzzle  # 可选：如果需要更好的 HTTP 客户端
 
-      # 步骤5：运行测试套件
-      - name: Run tests with PHPUnit
-        run: vendor/bin/phpunit
+      # 步骤4：执行网易云音乐任务
+      - name: Run Netease Music Tasks
+        env:
+          NETEASE_UIN: ${{ secrets.NETEASE_UIN }}
+          NETEASE_PWD: ${{ secrets.NETEASE_PWD }}
+          NETEASE_COUNTRYCODE: ${{ secrets.NETEASE_COUNTRYCODE }}
+        run: |
+          # 创建临时 PHP 文件来执行任务
+          cat > netease_runner.php << 'EOF'
+          <?php
+          require_once 'api.php';  # 假设您的 PHP 文件名为 api.php
+          
+          $api = new API();
+          
+          // 1. 登录（使用环境变量）
+          $uin = getenv('NETEASE_UIN');
+          $pwd = getenv('NETEASE_PWD');
+          $countrycode = getenv('NETEASE_COUNTRYCODE') ?: '86';
+          
+          if ($uin && $pwd) {
+              echo "=== 开始登录 ===\n";
+              $login_result = $api->login($uin, $pwd, $countrycode);
+              echo "登录结果: " . $login_result . "\n\n";
+              
+              // 等待一下让 cookie 设置生效
+              sleep(2);
+          }
+          
+          // 2. 签到
+          echo "=== 开始签到 ===\n";
+          $sign_result = $api->sign();
+          echo "签到结果: " . $sign_result . "\n\n";
+          
+          // 3. 打卡（模拟听歌）
+          echo "=== 开始打卡 ===\n";
+          $daka_result = $api->daka_new();
+          echo "打卡结果: " . $daka_result . "\n\n";
+          
+          // 4. 检查关注状态（验证登录状态）
+          echo "=== 检查状态 ===\n";
+          $check_result = $api->follow();
+          echo "状态检查: " . $check_result . "\n";
+          
+          echo "\n=== 所有任务完成 ===\n";
+          ?>
+          EOF
+          
+          # 执行 PHP 脚本
+          php netease_runner.php
