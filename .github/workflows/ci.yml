@@ -1,0 +1,46 @@
+name: PHP CI
+
+on:
+  push:
+    branches: [ main, develop ]  # 当向 main 或 develop 分支推送代码时触发
+  pull_request:
+    branches: [ main ]           # 当针对 main 分支创建拉取请求时触发
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 步骤1：检出代码
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 步骤2：设置 PHP 环境
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'  # 指定你项目所需的 PHP 版本
+
+      # 步骤3：验证 composer.json 文件
+      - name: Validate composer.json
+        run: composer validate --strict
+
+      # 步骤4：安装依赖（推荐使用缓存以加速后续构建）
+      - name: Get Composer Cache Directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php-
+
+      - name: Install dependencies
+        run: composer install --no-progress --no-interaction --prefer-dist
+
+      # 步骤5：运行测试套件
+      - name: Run tests with PHPUnit
+        run: vendor/bin/phpunit
