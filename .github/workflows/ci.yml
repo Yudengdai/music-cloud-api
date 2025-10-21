@@ -38,7 +38,7 @@ jobs:
           # 创建临时 PHP 文件来执行任务
           cat > netease_runner.php << 'EOF'
           <?php
-          require_once 'api.php';  # 假设您的 PHP 文件名为 api.php
+          require_once 'index.php';  # 假设您的 PHP 文件名为 api.php
           
           $api = new API();
           
